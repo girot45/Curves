@@ -16,8 +16,7 @@ class Point:
     def __init__(
             self,
             x: int or None,
-            y: int or None,
-            is_infty=False
+            y: int or None
     ):
         """
         Инициализация объекта Point.
@@ -28,14 +27,8 @@ class Point:
             is_infty: bool Флаг, указывающий,
             является ли точка бесконечной.
         """
-        if is_infty:
-            self.is_infty = True
-            x = None
-            y = None
-        else:
-            self.is_infty = False
-            self.x = x
-            self.y = y
+        self.x = x
+        self.y = y
 
     def __repr__(self) -> str:
         """
