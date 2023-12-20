@@ -1,6 +1,6 @@
 from Curves.Point import Point
+from Curves.maple.maple import rem, is_prime
 from Curves.utils import factorset
-from maple.maple import rem, is_prime
 import random
 
 
@@ -13,6 +13,7 @@ class Curve:
             b (int): Параметр кривой.
             p (int): Простое число, модуль для операций по модулю.
     """
+
     def __init__(self, a: int, b: int, p: int):
         """
         Инициализация объекта Curve.
@@ -24,46 +25,7 @@ class Curve:
         """
         self.a = a
         self.b = b
-
         self.p = p
-
-    def add(self, point1: Point, point2: Point) -> Point:
-
-        # handle special case for point at infinity
-        if point2.is_infty:
-            return point1
-        if point1.is_infty:
-            return point2
-
-        if point1 == point2:
-            # calculate (3x_1**2 + a)/(2y_1) mod p
-            l = ((3 * rem(point1.x, 2, self.p) + self.a) *
-                 rem((2 * point1.y % self.p), -1, self.p))
-        else:
-            # calculate (y_2 - y_1)/ (x_2 - x_1) mod p
-            l = (((point2.y - point1.y) % self.p) *
-                 rem(((point2.x - point1.x) % self.p), -1, self.p))
-        x_res = (rem(l, 2, self.p) - point1.x - point2.x) % self.p
-        y_res = (l * (point1.x - x_res) - point1.y) % self.p
-        return Point(x_res, y_res)
-
-    def double_and_add(self, point: Point, n: int) -> Point:
-        """
-        Удвоение и сложение точек на эллиптической кривой.
-        Args:
-            point (Point): Точка, которую нужно удвоить и сложить.
-            n (int): Целочисленный множитель.
-        Returns:
-            Point: Результат удвоения и сложения.
-        """
-        acc = Point(None, None, True)  # start at point at infinity
-        curr = point
-        while n != 0:
-            if n & 1 == 1:
-                acc = self.add(acc, curr)
-            curr = self.add(curr, curr)
-            n = n >> 1
-        return acc
 
     def ecdh(self, pub, priv):
         """
@@ -76,7 +38,7 @@ class Curve:
         Returns:
             int: Общий секрет, вычисленный с использованием ECDH.
         """
-        return self.double_and_add(pub, priv).x
+        return self.ECC_Mult(pub, priv).x
 
     def ECC_Generator(self):
         """
@@ -88,20 +50,14 @@ class Curve:
         setPoints = self.ECC_AllPoints()
         countPoints = len(setPoints) + 1
         rollIndex = random.randint(0, countPoints - 1)
-        #print(rollIndex)
-        #print(setPoints)
-        #print(setPoints[rollIndex])
+
         if is_prime(countPoints):
             x, y = setPoints[rollIndex]
             G = Point(x, y)
         else:
             setDivs = factorset(countPoints)
-            #print(setDivs)
             countDivs = len(setDivs)
-            #
             n = setDivs[countDivs - 1]
-            print(setDivs)
-            print(countPoints)
             h = countPoints // n
             i = 0
             G = Point(0, 0)
@@ -110,11 +66,6 @@ class Curve:
                 x, y = setPoints[i]
                 P = Point(x, y)
                 G = self.ECC_Mult(P, h)
-                print(h)
-                print(G)
-                print(i)
-                print(countPoints)
-                print(G.x == 0 and G.y == 0 )
                 i += 1
 
         if G.x == 0 and G.y == 0:
@@ -155,7 +106,6 @@ class Curve:
                     x3, y3 = 0, 0
             elif x1 != x2 or y1 != y2:
                 if x1 != x2:
-                    print(x2 - x1, -1, self.p)
                     lambda_val = ((y2 - y1) *
                                   rem(x2 - x1, -1, self.p) % self.p)
                     x3 = (lambda_val ** 2 - x1 - x2) % self.p
@@ -165,17 +115,34 @@ class Curve:
 
         return Point(x3, y3)
 
-    def ECC_Sub(self, P, Q):
-        tempQ = Point(Q[0], -Q[1] % self.p)
+    def ECC_Sub(self, P: Point, Q: Point) -> Point:
+        """
+        Вычитание двух целочисленных точек на эллиптической кривой в поле Галуа
+        Args:
+            P: Point - Первая точка.
+            Q: Point - Вторая точка.
+        Returns:
+            Point: Результат разности точек.
+        """
+        tempQ = Point(Q.x, -Q.y % self.p)
         R = self.ECC_Add(P, tempQ)
         return R
 
     def ECC_Mult(self, P: Point, k: int) -> Point:
+        """
+        Умножение целочисленной точки на целое число
+        на эллиптической кривой в поле Галуа
+        Args:
+            P: Point - точка
+            k: int - множитель
+        Returns:
+            Point: Результат умножения точки на число
+        """
+
         def count_Q(tempk):
             Q_ = Point(0, 0)
             i = 0
-            num = bin(tempk)[2:]  # Получаем бинарное представление
-            # числа k
+            num = bin(tempk)[2:]
             len_num = len(num)
 
             while i < len_num:
@@ -193,11 +160,17 @@ class Curve:
 
         return R
 
-    def ECC_AllPoints(self):
+    def ECC_AllPoints(self) -> list:
+        """
+        Поиск всех целочисленных точек
+        на эллиптической кривой в поле Галуа
+        Returns:
+
+        """
         points = []
         for x in range(self.p):
             y_squared = (x ** 3 + self.a * x + self.b) % self.p
-            y = rem(y_squared, (self.p + 1) // 4,self.p)
+            y = rem(y_squared, (self.p + 1) // 4, self.p)
 
             if rem(y, 2, self.p) == y_squared:
                 points.append([x, y])
@@ -205,6 +178,14 @@ class Curve:
         return points
 
     def ECC_CountPoints(self):
+        """
+        Вычисление количества целочисленных точек,
+        включая бесконечно удалённую,
+        на эллиптической кривой в поле Галуа.
+        Returns:
+            count: int - количества целочисленных точек,
+                включая бесконечно удалённую.
+        """
         count = 1  # Первая точка - бесконечная
         for x in range(self.p):
             y_squared = (x ** 3 + self.a * x + self.b) % self.p
@@ -213,13 +194,20 @@ class Curve:
                 count += 2
         return count
 
-    def ECC_OrderPoint(self, P):
+    def ECC_OrderPoint(self, P: Point) -> int:
+        """
+        Вычисление порядка точки на эллиптической кривой в поле Галуа
+        Args:
+            P: Point - точка на кривой
+        Returns:
+            n: int - порядок точки на кривой
+        """
         countPoints = self.ECC_CountPoints()
         setDivs = factorset(countPoints)
-        R = [115, 1665]
+        R = Point(115, 1665)
         i = 0
 
-        while R[0] != 0 or R[1] != 0:
+        while R.x != 0 or R.y != 0:
             i += 1
             R = self.ECC_Mult(P, setDivs[i - 1])
 
